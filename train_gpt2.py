@@ -412,7 +412,7 @@ def log_generated_text(generated_texts, step):
 def init_wandb(config):
     wandb.init(
         project="SimpleGPT2_FWedu10B_train",
-        name = "Base_karpathy"
+        name = "Base_karpathy",
         config=config,
     )
 
