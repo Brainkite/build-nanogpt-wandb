@@ -8,7 +8,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
 import wandb
-from wandb.sdk.data_types.trace_tree import Trace
 # -----------------------------------------------------------------------------
 
 class CausalSelfAttention(nn.Module):
@@ -400,18 +399,18 @@ def save_model_artifact(model, config, step, val_loss):
 
 # Log HellaSwag evaluation to wandb
 def log_hellaswag_eval(acc_norm, step):
-    wandb.log({"hellaswag_accuracy": acc_norm}, step=step)
+    wandb.log({"HS_acc": acc_norm}, step=step)
 
-# Log generated text to wandb
-def log_generated_text(generated_texts, step):
-    table = wandb.Table(columns=["step", "generated_text"])
-    for text in generated_texts:
-        table.add_data(step, text)
-    wandb.log({"generated_texts": table}, step=step)
+# # Log generated text to wandb
+# def log_generated_text(generated_texts, step):
+#     table = wandb.Table(columns=["step", "generated_text"])
+#     for text in generated_texts:
+#         table.add_data(step, text)
+#     wandb.log({"generated_texts": table}, step=step)
 
 def init_wandb(config):
     wandb.init(
-        project="SimpleGPT2_FWedu10B_train",
+        project="SimpleGPT2_compare_impl",
         name = "Base_karpathy",
         config=config,
     )
@@ -435,12 +434,13 @@ if master_process:
     init_wandb(config)
 
 
-for step in range(max_steps):
+# for step in range(max_steps):
+for step in range(7000):
     t0 = time.time()
     last_step = (step == max_steps - 1)
 
     # once in a while evaluate our validation loss
-    if step % 250 == 0 or last_step:
+    if step % 50 == 0 or last_step:
         model.eval()
         val_loader.reset()
         with torch.no_grad():
@@ -476,7 +476,7 @@ for step in range(max_steps):
                 torch.save(checkpoint, checkpoint_path)
 
     # once in a while evaluate hellaswag
-    if (step % 250 == 0 or last_step) and (not use_compile):
+    if (step % 50 == 0 or last_step) and (not use_compile):
         num_correct_norm = 0
         num_total = 0
         for i, example in enumerate(iterate_examples("val")):
@@ -540,14 +540,16 @@ for step in range(max_steps):
         torch.cuda.synchronize() # wait for the GPU to finish work
     t1 = time.time()
     dt = t1 - t0 # time difference in seconds
+    dtms = dt*1000
     tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
     tokens_per_sec = tokens_processed / dt
     if master_process:
         log_wandb({
             "train_loss": loss_accum.item(),
-            "learning_rate": lr,
-            "grad_norm": norm,
-            "tokens_per_sec": tokens_per_sec,
+            "lr": lr,
+            "norm": norm,
+            "dt_ms": dtms,
+            "toks/s": tokens_per_sec,
         }, step)
 
         print(f"step {step:5d} | loss: {loss_accum.item():.6f} | lr {lr:.4e} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tok/sec: {tokens_per_sec:.2f}")
